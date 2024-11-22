@@ -1,291 +1,208 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <string.h>
 
-// Estrutura da cobra
-typedef struct SegmentoCobra {
-    int posicaoX, posicaoY;
-    struct SegmentoCobra* proximo;
-} SegmentoCobra;
+// Variáveis globais para uso em loops
+int i, j; // i e j devem ser declarados fora para o Dev-C++ 5.11
 
-// Estrutura do alimento
+// Estrutura para armazenar os dados do jogador
 typedef struct {
-    int posicaoX, posicaoY;
-    int tipoEfeito; // 1: normal, 2: aumento de velocidade, 3: inversão de controles
-} Alimento;
+    char nome[50];
+    int pontosTotais;
+    int pontosFase[5]; // Pontuações específicas para 5 fases
+} Jogador;
 
-// Estrutura do tabuleiro
+// Estrutura para representar o labirinto
 typedef struct {
-    int largura, altura;
-    char** matriz;
-} Tabuleiro;
+    int linhas;
+    int colunas;
+    int **matriz;
+    int posInicioX;
+    int posInicioY;
+    int posDestinoX;
+    int posDestinoY;
+} Labirinto;
 
-// Estrutura de estatísticas
-typedef struct {
-    char nome[20];
-    int pontuacao;
-} Estatistica;
-
-// Função para criar o segmento inicial da cobra
-SegmentoCobra* criarSegmentoInicial(int x, int y) {
-    SegmentoCobra* novoSegmento = (SegmentoCobra*)malloc(sizeof(SegmentoCobra));
-    if (novoSegmento == NULL) {
-        printf("Erro ao alocar memória para o segmento inicial da cobra.\n");
-        exit(1);
-    }
-    novoSegmento->posicaoX = x;
-    novoSegmento->posicaoY = y;
-    novoSegmento->proximo = NULL;
-    return novoSegmento;
-}
-
-// Função para adicionar um novo segmento à cobra (crescimento)
-void adicionarSegmentoCobra(SegmentoCobra* cobra) {
-    SegmentoCobra* novoSegmento = (SegmentoCobra*)malloc(sizeof(SegmentoCobra));
-    if (novoSegmento == NULL) {
-        printf("Erro ao alocar memória para um novo segmento da cobra.\n");
-        exit(1);
-    }
-    
-    SegmentoCobra* cauda = cobra;
-    while (cauda->proximo != NULL) {
-        cauda = cauda->proximo;
+// Função para carregar o labirinto de um arquivo
+Labirinto *carregarLabirinto(const char *nomeArquivo) {
+    FILE *arquivo = fopen(nomeArquivo, "r");
+    if (!arquivo) {
+        printf("Erro ao abrir o arquivo %s. Verifique o nome e tente novamente.\n", nomeArquivo);
+        return NULL;
     }
 
-    novoSegmento->posicaoX = cauda->posicaoX;
-    novoSegmento->posicaoY = cauda->posicaoY;
-    novoSegmento->proximo = NULL;
-    cauda->proximo = novoSegmento;
-}
+    Labirinto *lab = (Labirinto *)malloc(sizeof(Labirinto));
+    fscanf(arquivo, "%d %d", &lab->linhas, &lab->colunas);
 
-// Função para mover a cobra
-int moverCobra(SegmentoCobra* cobra, int direcao, Tabuleiro tabuleiro) {
-    int posicaoAnteriorX = cobra->posicaoX;
-    int posicaoAnteriorY = cobra->posicaoY;
-
-    switch(direcao) {
-        case 0: cobra->posicaoY--; break; // Move para cima
-        case 1: cobra->posicaoY++; break; // Move para baixo
-        case 2: cobra->posicaoX--; break; // Move para a esquerda
-        case 3: cobra->posicaoX++; break; // Move para a direita
-    }
-
-    // Verifica se a cobra colidiu com a borda ou um obstáculo
-    if (cobra->posicaoX < 0 || cobra->posicaoX >= tabuleiro.largura ||
-        cobra->posicaoY < 0 || cobra->posicaoY >= tabuleiro.altura ||
-        tabuleiro.matriz[cobra->posicaoY][cobra->posicaoX] == '#') {
-        return 1; // Colidiu
-    }
-
-    // Move os segmentos da cobra
-    SegmentoCobra* atual = cobra->proximo;
-    while (atual != NULL) {
-        int tempX = atual->posicaoX;
-        int tempY = atual->posicaoY;
-        atual->posicaoX = posicaoAnteriorX;
-        atual->posicaoY = posicaoAnteriorY;
-        posicaoAnteriorX = tempX;
-        posicaoAnteriorY = tempY;
-        atual = atual->proximo;
-    }
-    return 0;
-}
-
-// Funções principais do jogo
-Alimento gerarAlimento(int largura, int altura);
-Tabuleiro carregarFase(const char* nomeArquivo);
-Tabuleiro gerarFaseProcedural(int largura, int altura);
-void exibirTabuleiro(SegmentoCobra* cobra, Alimento alimento, Tabuleiro tabuleiro);
-int verificarColisao(SegmentoCobra* cobra);
-void salvarEstatistica(const char* nomeJogador, int pontuacao);
-void exibirMenu();
-void fimDeJogo(int pontuacao);
-
-// Função principal do loop de jogo
-void iniciarJogo(const char* nomeJogador) {
-    int direcao = 3; 
-    int pontuacao = 0;
-    int fase;
-
-    for (fase = 1; fase <= 6; fase++) {
-        Tabuleiro tabuleiro;
-
-        if (fase <= 5) {
-            char nomeArquivoFase[20];
-            sprintf(nomeArquivoFase, "fase%d.txt", fase);
-            tabuleiro = carregarFase(nomeArquivoFase);
-        } else {
-            tabuleiro = gerarFaseProcedural(20, 10);
-        }
-
-        SegmentoCobra* cobra = criarSegmentoInicial(5, 5);
-        Alimento alimento = gerarAlimento(tabuleiro.largura, tabuleiro.altura);
-
-        while (1) {
-            char tecla = getchar();
-            if (tecla == 'w') direcao = 0;
-            else if (tecla == 's') direcao = 1;
-            else if (tecla == 'a') direcao = 2;
-            else if (tecla == 'd') direcao = 3;
-
-            if (moverCobra(cobra, direcao, tabuleiro) || verificarColisao(cobra)) {
-                fimDeJogo(pontuacao);
-                salvarEstatistica(nomeJogador, pontuacao);
-                return;
+    lab->matriz = (int **)malloc(lab->linhas * sizeof(int *));
+    for (i = 0; i < lab->linhas; i++) {
+        lab->matriz[i] = (int *)malloc(lab->colunas * sizeof(int));
+        for (j = 0; j < lab->colunas; j++) {
+            fscanf(arquivo, "%d", &lab->matriz[i][j]);
+            if (lab->matriz[i][j] == 2) {
+                lab->posInicioX = i;
+                lab->posInicioY = j;
+            } else if (lab->matriz[i][j] == 3) {
+                lab->posDestinoX = i;
+                lab->posDestinoY = j;
             }
-
-            if (cobra->posicaoX == alimento.posicaoX && cobra->posicaoY == alimento.posicaoY) {
-                adicionarSegmentoCobra(cobra);
-                pontuacao += 10;
-                alimento = gerarAlimento(tabuleiro.largura, tabuleiro.altura);
-            }
-
-            system("clear");
-            exibirTabuleiro(cobra, alimento, tabuleiro);
-            usleep(200000);
         }
     }
-    salvarEstatistica(nomeJogador, pontuacao);
+
+    fclose(arquivo);
+    return lab;
 }
 
-// Funções de verificação de colisão e exibição do tabuleiro
-int verificarColisao(SegmentoCobra* cobra) {
-    SegmentoCobra* cabeca = cobra;
-    SegmentoCobra* atual = cabeca->proximo;
-    while (atual != NULL) {
-        if (cabeca->posicaoX == atual->posicaoX && cabeca->posicaoY == atual->posicaoY) {
-            return 1; // Colidiu com o próprio corpo
-        }
-        atual = atual->proximo;
+// Função para liberar a memória do labirinto
+void liberarLabirinto(Labirinto *lab) {
+    if (!lab) return;
+    for (i = 0; i < lab->linhas; i++) {
+        free(lab->matriz[i]);
     }
-    return 0;
+    free(lab->matriz);
+    free(lab);
 }
 
-void exibirTabuleiro(SegmentoCobra* cobra, Alimento alimento, Tabuleiro tabuleiro) {
-    int y, x;
-    for (y = 0; y < tabuleiro.altura; y++) {
-        for (x = 0; x < tabuleiro.largura; x++) {
-            int parteCobra = 0;
-            SegmentoCobra* atual = cobra;
-            while (atual != NULL) {
-                if (atual->posicaoX == x && atual->posicaoY == y) {
-                    printf("O");
-                    parteCobra = 1;
-                    break;
-                }
-                atual = atual->proximo;
-            }
-            if (!parteCobra) {
-                if (alimento.posicaoX == x && alimento.posicaoY == y)
-                    printf("A"); // Representação do alimento
-                else
-                    printf("%c", tabuleiro.matriz[y][x]); // Espaço ou obstáculo
-            }
+// Função para exibir o labirinto
+void exibirLabirinto(Labirinto *lab) {
+    for (i = 0; i < lab->linhas; i++) {
+        for (j = 0; j < lab->colunas; j++) {
+            if (lab->matriz[i][j] == 2)
+                printf("S ");
+            else if (lab->matriz[i][j] == 3)
+                printf("E ");
+            else
+                printf("%d ", lab->matriz[i][j]);
         }
         printf("\n");
     }
 }
 
-// Funções para carregar e gerar fases
-Tabuleiro carregarFase(const char* nomeArquivo) {
-    Tabuleiro tabuleiro;
-    FILE* arquivo = fopen(nomeArquivo, "r");
+// Função para mover o jogador
+int moverJogador(Labirinto *lab, int *x, int *y, char movimento) {
+    int novoX = *x, novoY = *y;
+
+    if (movimento == 'w') novoX--;
+    else if (movimento == 's') novoX++;
+    else if (movimento == 'a') novoY--;
+    else if (movimento == 'd') novoY++;
+
+    if (novoX >= 0 && novoX < lab->linhas && novoY >= 0 && novoY < lab->colunas && lab->matriz[novoX][novoY] != 1) {
+        *x = novoX;
+        *y = novoY;
+        return lab->matriz[novoX][novoY] == 3;
+    }
+    return 0;
+}
+
+// Função para salvar estatísticas em arquivo
+void salvarEstatisticas(Jogador *jogador) {
+    FILE *arquivo = fopen("estatisticas.bin", "ab");
     if (!arquivo) {
-        printf("Erro ao abrir o arquivo da fase %s\n", nomeArquivo);
-        exit(1);
-    }
-
-    fscanf(arquivo, "%d %d", &tabuleiro.largura, &tabuleiro.altura);
-    tabuleiro.matriz = (char**)malloc(tabuleiro.altura * sizeof(char*));
-    for (int i = 0; i < tabuleiro.altura; i++) {
-        tabuleiro.matriz[i] = (char*)malloc(tabuleiro.largura * sizeof(char));
-        for (int j = 0; j < tabuleiro.largura; j++) {
-            fscanf(arquivo, " %c", &tabuleiro.matriz[i][j]);
-        }
-    }
-    fclose(arquivo);
-    return tabuleiro;
-}
-
-Tabuleiro gerarFaseProcedural(int largura, int altura) {
-    Tabuleiro tabuleiro;
-    tabuleiro.largura = largura;
-    tabuleiro.altura = altura;
-    tabuleiro.matriz = (char**)malloc(altura * sizeof(char*));
-    for (int i = 0; i < altura; i++) {
-        tabuleiro.matriz[i] = (char*)malloc(largura * sizeof(char));
-        for (int j = 0; j < largura; j++) {
-            if (rand() % 10 < 2) {
-                tabuleiro.matriz[i][j] = '#'; // Obstáculo com 20% de chance
-            } else {
-                tabuleiro.matriz[i][j] = ' ';
-            }
-        }
-    }
-    return tabuleiro;
-}
-
-// Função para gerar alimento aleatório
-Alimento gerarAlimento(int largura, int altura) {
-    Alimento alimento;
-    alimento.posicaoX = rand() % largura;
-    alimento.posicaoY = rand() % altura;
-    alimento.tipoEfeito = 1;
-    return alimento;
-}
-
-// Função para terminar o jogo e exibir pontuação
-void fimDeJogo(int pontuacao) {
-    printf("Game Over! Pontuação final: %d\n", pontuacao);
-    printf("Pressione qualquer tecla para sair...");
-    getchar();
-}
-
-// Função para salvar estatísticas
-void salvarEstatistica(const char* nomeJogador, int pontuacao) {
-    FILE* arquivo = fopen("estatisticas.bin", "ab");
-    if (!arquivo) {
-        printf("Erro ao abrir o arquivo de estatísticas\n");
+        printf("Erro ao salvar estatísticas.\n");
         return;
     }
-    Estatistica estat;
-    strncpy(estat.nome, nomeJogador, 20);
-    estat.pontuacao = pontuacao;
-    fwrite(&estat, sizeof(Estatistica), 1, arquivo);
+    fwrite(jogador, sizeof(Jogador), 1, arquivo);
     fclose(arquivo);
 }
 
-// Função de exibição do menu
-void exibirMenu() {
-    printf("1. Iniciar Jogo\n");
-    printf("2. Estatísticas\n");
-    printf("Escolha uma opção: ");
+// Função para exibir estatísticas
+void exibirEstatisticas() {
+    FILE *arquivo = fopen("estatisticas.bin", "rb");
+    if (!arquivo) {
+        printf("Nenhuma estatística disponível.\n");
+        return;
+    }
+
+    Jogador jogador;
+    printf("=== Estatísticas ===\n");
+    while (fread(&jogador, sizeof(Jogador), 1, arquivo)) {
+        printf("Jogador: %s - Pontos Totais: %d\n", jogador.nome, jogador.pontosTotais);
+        for (i = 0; i < 5; i++) {
+            printf("  Fase %d: %d pontos\n", i + 1, jogador.pontosFase[i]);
+        }
+    }
+    fclose(arquivo);
+}
+
+// Função principal para jogar uma fase
+int jogarFase(const char *arquivoFase, Jogador *jogador, int faseAtual) {
+    Labirinto *lab = carregarLabirinto(arquivoFase);
+    if (!lab) return 0;
+
+    int x = lab->posInicioX;
+    int y = lab->posInicioY;
+    char movimento;
+    int movimentos = 0;
+    const int limiteMovimentos = 20;
+
+    printf("=== Fase %d ===\n", faseAtual + 1);
+    printf("Controles: w (cima), s (baixo), a (esquerda), d (direita)\n");
+
+    while (1) {
+        exibirLabirinto(lab);
+        printf("Sua posição: (%d, %d). Movimentos restantes: %d\n", x, y, limiteMovimentos - movimentos);
+        printf("Digite um movimento: ");
+        fflush(stdin); // Limpa o buffer para evitar problemas
+        scanf(" %c", &movimento);
+
+        if (movimento != 'w' && movimento != 'a' && movimento != 's' && movimento != 'd') {
+            printf("Movimento inválido! Use apenas 'w', 'a', 's' ou 'd'.\n");
+            continue;
+        }
+
+        movimentos++;
+        if (movimentos > limiteMovimentos) {
+            printf("Você perdeu! Número de movimentos excedido.\n");
+            liberarLabirinto(lab);
+            return 0;
+        }
+
+        if (moverJogador(lab, &x, &y, movimento)) {
+            printf("Parabéns! Você chegou ao destino em %d movimentos!\n", movimentos);
+            jogador->pontosFase[faseAtual] = 100 - movimentos;
+            jogador->pontosTotais += jogador->pontosFase[faseAtual];
+            liberarLabirinto(lab);
+            return 1;
+        }
+    }
 }
 
 // Função principal
 int main() {
-    srand(time(NULL));
-    exibirMenu();
-    int opcao;
-    char nomeJogador[20];
-    scanf("%d", &opcao);
+    char opcao;
+    Jogador jogador = {.pontosTotais = 0};
 
-    if (opcao == 1) {
-        printf("Nome do jogador: ");
-        scanf("%s", nomeJogador);
-        iniciarJogo(nomeJogador);
-    } else if (opcao == 2) {
-        FILE* arquivo = fopen("estatisticas.bin", "rb");
-        if (arquivo) {
-            Estatistica estat;
-            while (fread(&estat, sizeof(Estatistica), 1, arquivo)) {
-                printf("Jogador: %s, Pontuação: %d\n", estat.nome, estat.pontuacao);
+    printf("Digite seu nome: ");
+    scanf("%s", jogador.nome);
+
+    while (1) {
+        printf("\n=== Jogo de Labirinto ===\n");
+        printf("1. Iniciar Jogo\n");
+        printf("2. Estatísticas\n");
+        printf("3. Sair\n");
+        printf("Escolha uma opção: ");
+        fflush(stdin); // Limpa o buffer antes da entrada
+        scanf(" %c", &opcao);
+
+        if (opcao == '1') {
+            char *fases[5] = {"fase1.txt", "fase2.txt", "fase3.txt", "fase4.txt", "fase5.txt"};
+            for (i = 0; i < 5; i++) {
+                if (!jogarFase(fases[i], &jogador, i)) {
+                    printf("Fim de jogo! Pontuação total: %d\n", jogador.pontosTotais);
+                    salvarEstatisticas(&jogador);
+                    break;
+                }
             }
-            fclose(arquivo);
+        } else if (opcao == '2') {
+            exibirEstatisticas();
+        } else if (opcao == '3') {
+            printf("Saindo do jogo. Até mais, %s!\n", jogador.nome);
+            break;
         } else {
-            printf("Nenhuma estatística disponível.\n");
+            printf("Opção inválida! Tente novamente.\n");
         }
     }
+
     return 0;
 }
